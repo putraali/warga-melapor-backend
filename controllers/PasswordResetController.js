@@ -4,13 +4,17 @@ import argon2 from "argon2";
 import { Op } from "sequelize";
 
 // --- KONFIGURASI PENGIRIMAN EMAIL (SMTP) AMAN DARI .ENV ---
-// Secara arsitektur, Node.js akan membaca kredensial ini dari file .env di root folder Anda
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    // PERBAIKAN: Gunakan host eksplisit alih-alih service 'gmail'
+    host: 'smtp.gmail.com', 
+    port: 465, // Port aman untuk SSL
+    secure: true, 
     auth: {
         user: process.env.EMAIL_USER, 
         pass: process.env.EMAIL_PASS  
-    }
+    },
+    // KUNCI PERBAIKAN RAILWAY ENETUNREACH: Paksa gunakan IPv4
+    family: 4 
 });
 
 // 1. FUNGSI MEMINTA OTP (REQUEST OTP)
@@ -36,7 +40,7 @@ export const requestOTP = async (req, res) => {
 
         console.log(`\n[SYSTEM LOG] Mempersiapkan pengiriman OTP ke ${user.email}...\n`);
 
-        // --- BLOK PENGIRIMAN EMAIL (SUDAH DIAKTIFKAN & MENGGUNAKAN HTML) ---
+        // --- BLOK PENGIRIMAN EMAIL ---
         const mailOptions = {
             from: `"Sistem Warga Melapor" <${process.env.EMAIL_USER}>`,
             to: user.email,
