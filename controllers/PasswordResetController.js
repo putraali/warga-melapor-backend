@@ -3,6 +3,10 @@ import nodemailer from "nodemailer";
 import argon2 from "argon2";
 import { Op } from "sequelize";
 
+// --- TAMBAHKAN DUA BARIS INI DI SINI ---
+import dns from "dns";
+dns.setDefaultResultOrder('ipv4first'); // Intervensi tingkat inti untuk memaksa IPv4
+
 // --- KONFIGURASI PENGIRIMAN EMAIL (SMTP) AMAN DARI .ENV ---
 const transporter = nodemailer.createTransport({
     // PERBAIKAN: Gunakan host eksplisit alih-alih service 'gmail'
