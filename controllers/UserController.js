@@ -1,11 +1,8 @@
 import Users from "../models/UserModel.js";
 import argon2 from "argon2";
 import Reports from "../models/ReportModel.js"; 
-
-// --- JANGAN LUPA DUA IMPORT INI ---
 import path from "path"; 
 import fs from "fs";
-// ----------------------------------
 
 // 1. GET ALL USERS
 export const getUsers = async(req, res) => {
@@ -61,7 +58,7 @@ export const createUser = async(req, res) => {
     }
 }
 
-// 4. UPDATE USER (FIXED)
+// 4. UPDATE USER (TERMASUK LOGIKA HAPUS & UPLOAD FOTO)
 export const updateUser = async(req, res) => {
     try {
         const user = await Users.findOne({
@@ -75,13 +72,24 @@ export const updateUser = async(req, res) => {
             return res.status(403).json({msg: "Akses Ditolak: Anda hanya boleh mengedit profil sendiri!"});
         }
 
-        // 2. LOGIKA UPLOAD FOTO
-        let fileName = "";
-        
-        // Cek jika tidak ada file baru, pakai file lama
-        if(!req.files || !req.files.file) {
-            fileName = user.image; 
-        } else {
+        // 2. LOGIKA UPLOAD & HAPUS FOTO
+        let fileName = user.image; 
+        let url = user.url;        
+
+        // Cek apakah ada instruksi penghapusan foto dari Frontend
+        if (req.body.removePhoto === "true") {
+            if(user.image) {
+                const filepath = `./public/images/${user.image}`;
+                if(fs.existsSync(filepath)) {
+                    fs.unlinkSync(filepath);
+                }
+            }
+            // Kosongkan variabel untuk update ke database
+            fileName = null;
+            url = null;
+        } 
+        // Jika tidak dihapus, cek apakah ada file baru yang diupload
+        else if (req.files && req.files.file) {
             const file = req.files.file;
             const fileSize = file.data.length;
             const ext = path.extname(file.name);
@@ -91,24 +99,24 @@ export const updateUser = async(req, res) => {
             if(!allowedType.includes(ext.toLowerCase())) return res.status(422).json({msg: "Format gambar harus PNG, JPG, JPEG"});
             if(fileSize > 5000000) return res.status(422).json({msg: "Ukuran gambar maksimal 5 MB"});
 
-            // Hapus foto lama
+            // Hapus foto lama sebelum menyimpan yang baru
             if(user.image) {
                 const filepath = `./public/images/${user.image}`;
-                // Cek dulu apakah filenya ada sebelum dihapus agar tidak error
                 if(fs.existsSync(filepath)) {
                     fs.unlinkSync(filepath);
                 }
             }
 
-            // Simpan foto baru (Pastikan folder public/images ADA)
+            // Simpan foto baru
             file.mv(`./public/images/${fileName}`, (err)=>{
                 if(err) return res.status(500).json({msg: err.message});
             });
+
+            // Perbarui URL
+            url = `${req.protocol}://${req.get("host")}/images/${fileName}`;
         }
 
-        const url = fileName ? `${req.protocol}://${req.get("host")}/images/${fileName}` : null;
-
-        // 3. DATA UPDATE
+        // 3. DATA UPDATE PASSWORD & INFO DASAR
         const { name, email, password, confPassword, role } = req.body;
         
         let hashPassword;
@@ -126,6 +134,7 @@ export const updateUser = async(req, res) => {
             roleToUpdate = role; 
         }
 
+        // 5. EKSEKUSI UPDATE KE DATABASE
         await Users.update({
             name: name,
             email: email,
@@ -141,7 +150,7 @@ export const updateUser = async(req, res) => {
 
         res.status(200).json({msg: "User Berhasil Diupdate"});
     } catch (error) {
-        console.log(error); // Cek terminal backend untuk lihat error asli
+        console.log(error); 
         res.status(500).json({msg: error.message});
     }
 }
@@ -154,6 +163,14 @@ export const deleteUser = async(req, res) => {
     if(!user) return res.status(404).json({msg: "User tidak ditemukan"});
     
     try {
+        // --- OPSIONAL TAPI DIREKOMENDASIKAN: Hapus foto juga saat user dihapus ---
+        if(user.image) {
+            const filepath = `./public/images/${user.image}`;
+            if(fs.existsSync(filepath)) {
+                fs.unlinkSync(filepath);
+            }
+        }
+
         await Users.destroy({ where:{ id: user.id } });
         res.status(200).json({msg: "User Deleted"});
     } catch (error) {
