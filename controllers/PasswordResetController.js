@@ -3,22 +3,26 @@ import nodemailer from "nodemailer";
 import argon2 from "argon2";
 import { Op } from "sequelize";
 
-// --- TAMBAHKAN DUA BARIS INI DI SINI ---
-import dns from "dns";
-dns.setDefaultResultOrder('ipv4first'); // Intervensi tingkat inti untuk memaksa IPv4
+// --- WAJIB IMPORT DNS ---
+import dns from "dns"; 
 
-// --- KONFIGURASI PENGIRIMAN EMAIL (SMTP) AMAN DARI .ENV ---
+// --- KONFIGURASI PENGIRIMAN EMAIL DENGAN DNS BYPASS MUTLAK ---
 const transporter = nodemailer.createTransport({
-    // PERBAIKAN: Gunakan host eksplisit alih-alih service 'gmail'
     host: 'smtp.gmail.com', 
-    port: 465, // Port aman untuk SSL
+    port: 465, 
     secure: true, 
     auth: {
         user: process.env.EMAIL_USER, 
         pass: process.env.EMAIL_PASS  
     },
-    // KUNCI PERBAIKAN RAILWAY ENETUNREACH: Paksa gunakan IPv4
-    family: 4 
+    // --- KUNCI PENYELESAIAN FINAL: MENGAMBIL ALIH DNS LOOKUP ---
+    // Fungsi ini akan memaksa nodemailer menolak IPv6 sebelum koneksi dibuat
+    lookup: (hostname, options, callback) => {
+        dns.lookup(hostname, { family: 4 }, (err, address, family) => {
+            console.log(`[DNS RESOLVER] Memaksa rute ke IPv4: ${address}`);
+            callback(err, address, family);
+        });
+    }
 });
 
 // 1. FUNGSI MEMINTA OTP (REQUEST OTP)
