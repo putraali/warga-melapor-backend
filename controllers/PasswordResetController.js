@@ -6,11 +6,11 @@ import { Op } from "sequelize";
 // --- WAJIB IMPORT DNS ---
 import dns from "dns"; 
 
-// --- KONFIGURASI PENGIRIMAN EMAIL DENGAN DNS BYPASS MUTLAK ---
+// --- KONFIGURASI PENGIRIMAN EMAIL DENGAN STARTTLS & DNS BYPASS ---
 const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com', 
-    port: 465, 
-    secure: true, 
+    port: 587,      // PERUBAHAN 1: Gunakan port 587 (STARTTLS) menembus firewall Railway
+    secure: false,  // PERUBAHAN 2: Wajib false untuk port 587
     auth: {
         user: process.env.EMAIL_USER, 
         pass: process.env.EMAIL_PASS  
