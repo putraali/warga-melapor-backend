@@ -38,10 +38,13 @@ const initDatabase = async () => {
 }
 initDatabase();
 
-// --- 4. MIDDLEWARE ---
+// --- 4. MIDDLEWARE (PERBAIKAN CORS) ---
 app.use(cors({ 
     credentials: true, 
-    origin: 'http://localhost:5173' 
+    origin: [
+        'http://localhost:5173', 
+        'https://warga-melapor.vercel.app' // Domain Frontend Production Anda
+    ] 
 }));
 app.use(cookieParser());
 app.use(express.json()); 
