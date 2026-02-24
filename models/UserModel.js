@@ -26,7 +26,8 @@ const Users = db.define('users', {
         validate: { notEmpty: true }
     },
     role: {
-        type: DataTypes.ENUM('warga', 'admin', 'penanggung_jawab'),
+        // --- DIPERBARUI: Menambahkan 'ketua_rw' ---
+        type: DataTypes.ENUM('warga', 'admin', 'penanggung_jawab', 'ketua_rw'),
         defaultValue: 'warga',
         allowNull: false,
         validate: { notEmpty: true }
@@ -47,6 +48,26 @@ const Users = db.define('users', {
     },
     resetPasswordExpires: {
         type: DataTypes.DATE,
+        allowNull: true
+    },
+    // ==========================================
+    // --- TAMBAHAN BARU SESUAI DATABASE ---
+    // ==========================================
+    nik: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    alamat: {
+        type: DataTypes.TEXT,
+        allowNull: true
+    },
+    rw: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    status_warga: {
+        type: DataTypes.ENUM('pending', 'verified', 'rejected'),
+        defaultValue: 'pending',
         allowNull: true
     }
 }, {
