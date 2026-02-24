@@ -8,7 +8,8 @@ import fs from "fs";
 export const getUsers = async(req, res) => {
     try {
         const response = await Users.findAll({
-            attributes: ['uuid', 'name', 'email', 'role', 'url'] 
+            // --- DITAMBAHKAN: nik, alamat, rw, status_warga ---
+            attributes: ['uuid', 'name', 'email', 'role', 'url', 'nik', 'alamat', 'rw', 'status_warga'] 
         });
         res.status(200).json(response);
     } catch (error) {
@@ -20,7 +21,8 @@ export const getUsers = async(req, res) => {
 export const getUserById = async(req, res) => {
     try {
         const user = await Users.findOne({
-            attributes: ['id', 'uuid', 'name', 'email', 'role', 'url'],
+            // --- DITAMBAHKAN: nik, alamat, rw, status_warga ---
+            attributes: ['id', 'uuid', 'name', 'email', 'role', 'url', 'nik', 'alamat', 'rw', 'status_warga'],
             where: {
                 uuid: req.params.id
             }
@@ -41,7 +43,9 @@ export const getUserById = async(req, res) => {
 
 // 3. CREATE USER
 export const createUser = async(req, res) => {
-    const { name, email, password, confPassword, role } = req.body;
+    // --- TAMBAHKAN: nik, alamat, rw di req.body ---
+    const { name, email, password, confPassword, role, nik, alamat, rw } = req.body;
+    
     if(password !== confPassword) return res.status(400).json({msg: "Password dan Confirm Password tidak cocok"});
     const hashPassword = await argon2.hash(password);
     
@@ -50,7 +54,12 @@ export const createUser = async(req, res) => {
             name: name,
             email: email,
             password: hashPassword,
-            role: role 
+            role: role,
+            // --- TAMBAHKAN KE DATABASE ---
+            nik: nik,
+            alamat: alamat,
+            rw: rw
+            // (status_warga otomatis menjadi 'pending' berdasarkan default database MySQL)
         });
         res.status(201).json({msg: "User Berhasil Dibuat"});
     } catch (error) {
@@ -116,8 +125,8 @@ export const updateUser = async(req, res) => {
             url = `${req.protocol}://${req.get("host")}/images/${fileName}`;
         }
 
-        // 3. DATA UPDATE PASSWORD & INFO DASAR
-        const { name, email, password, confPassword, role } = req.body;
+        // 3. DATA UPDATE PASSWORD & INFO DASAR (DITAMBAH NIK, ALAMAT, RW)
+        const { name, email, password, confPassword, role, nik, alamat, rw } = req.body;
         
         let hashPassword;
         if(password === "" || password === null || password === undefined){
@@ -141,7 +150,10 @@ export const updateUser = async(req, res) => {
             password: hashPassword,
             role: roleToUpdate,
             image: fileName,
-            url: url
+            url: url,
+            nik: nik,       // --- DITAMBAHKAN ---
+            alamat: alamat, // --- DITAMBAHKAN ---
+            rw: rw          // --- DITAMBAHKAN ---
         },{
             where:{
                 id: user.id
@@ -163,7 +175,6 @@ export const deleteUser = async(req, res) => {
     if(!user) return res.status(404).json({msg: "User tidak ditemukan"});
     
     try {
-        // --- OPSIONAL TAPI DIREKOMENDASIKAN: Hapus foto juga saat user dihapus ---
         if(user.image) {
             const filepath = `./public/images/${user.image}`;
             if(fs.existsSync(filepath)) {
@@ -221,3 +232,59 @@ export const createPenanggungJawab = async(req, res) => {
         res.status(400).json({msg: error.message});
     }
 }
+
+// ==========================================
+// FITUR BARU: VALIDASI KETUA RW
+// ==========================================
+
+// 8. GET WARGA PENDING (KHUSUS KETUA RW)
+export const getWargaPending = async (req, res) => {
+    try {
+        if (req.role !== "ketua_rw") {
+            return res.status(403).json({ msg: "Akses terlarang. Hanya untuk Ketua RW." });
+        }
+
+        // Cari data Ketua RW yang sedang login
+        const ketua = await Users.findOne({ where: { id: req.userId } });
+
+        // Tarik data warga yang statusnya pending di RW yang sama
+        const response = await Users.findAll({
+            attributes: ['uuid', 'name', 'nik', 'alamat', 'rw', 'status_warga'],
+            where: {
+                role: 'warga',
+                rw: ketua.rw, 
+                status_warga: 'pending'
+            }
+        });
+        res.status(200).json(response);
+    } catch (error) {
+        res.status(500).json({ msg: error.message });
+    }
+};
+
+// 9. VALIDASI WARGA (TERIMA/TOLAK)
+export const validasiWarga = async (req, res) => {
+    try {
+        const user = await Users.findOne({
+            where: { uuid: req.params.id }
+        });
+
+        if (!user) return res.status(404).json({ msg: "Warga tidak ditemukan" });
+
+        const ketua = await Users.findOne({ where: { id: req.userId } });
+
+        if (req.role === "ketua_rw" && ketua.rw !== user.rw) {
+            return res.status(403).json({ msg: "Anda tidak berhak memvalidasi warga dari RW lain." });
+        }
+
+        const { status_warga } = req.body; // Menerima 'verified' atau 'rejected'
+
+        await Users.update({ status_warga: status_warga }, {
+            where: { id: user.id }
+        });
+
+        res.status(200).json({ msg: `Warga berhasil di-${status_warga === 'verified' ? 'setujui' : 'tolak'}` });
+    } catch (error) {
+        res.status(400).json({ msg: error.message });
+    }
+};

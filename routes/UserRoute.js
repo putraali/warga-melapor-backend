@@ -5,9 +5,11 @@ import {
     createUser,
     updateUser,
     deleteUser,
-    getStats 
+    getStats,
+    createPenanggungJawab,
+    getWargaPending, // <-- TAMBAHAN BARU
+    validasiWarga    // <-- TAMBAHAN BARU
 } from "../controllers/UserController.js";
-import { createPenanggungJawab } from "../controllers/UserController.js";
 import { verifyToken, verifyAdmin } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -17,7 +19,16 @@ const router = express.Router();
 router.get('/stats', verifyToken, getStats); 
 // -------------------------------
 
+// ==========================================
+// FITUR BARU: VALIDASI KETUA RW
+// ==========================================
+// Hanya menggunakan verifyToken karena pengecekan role 'ketua_rw' sudah dilakukan di dalam controllernya
+router.get('/warga/pending', verifyToken, getWargaPending);
+router.patch('/warga/validasi/:id', verifyToken, validasiWarga);
+
+// ==========================================
 // CRUD User (Tetap Khusus Admin, kecuali view/edit profil sendiri)
+// ==========================================
 router.get('/users', verifyToken, verifyAdmin, getUsers);
 router.get('/users/:id', verifyToken, getUserById);
 router.post('/users', verifyToken, verifyAdmin, createUser);
