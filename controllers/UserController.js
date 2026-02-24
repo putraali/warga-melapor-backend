@@ -4,13 +4,33 @@ import Reports from "../models/ReportModel.js";
 import path from "path"; 
 import fs from "fs";
 
-// 1. GET ALL USERS
+// 1. GET ALL USERS (DIPERBARUI UNTUK ADMIN & KETUA RW)
 export const getUsers = async(req, res) => {
     try {
-        const response = await Users.findAll({
-            // --- DITAMBAHKAN: nik, alamat, rw, status_warga ---
-            attributes: ['uuid', 'name', 'email', 'role', 'url', 'nik', 'alamat', 'rw', 'status_warga'] 
-        });
+        let response;
+        
+        // JIKA YANG LOGIN ADALAH ADMIN -> Tampilkan semua user
+        if (req.role === "admin") {
+            response = await Users.findAll({
+                attributes: ['uuid', 'name', 'email', 'role', 'url', 'nik', 'alamat', 'rw', 'status_warga'] 
+            });
+        } 
+        // JIKA YANG LOGIN ADALAH KETUA RW -> Tampilkan warga di RW-nya saja
+        else if (req.role === "ketua_rw") {
+            const ketua = await Users.findOne({ where: { id: req.userId } });
+            response = await Users.findAll({
+                attributes: ['uuid', 'name', 'email', 'role', 'url', 'nik', 'alamat', 'rw', 'status_warga'],
+                where: {
+                    role: 'warga',    // Hanya tampilkan warga
+                    rw: ketua.rw      // Hanya yang RW-nya sama dengan RW Ketua
+                }
+            });
+        } 
+        // JIKA WARGA / PETUGAS -> Tolak aksesnya
+        else {
+            return res.status(403).json({msg: "Akses Ditolak: Anda tidak memiliki wewenang."});
+        }
+
         res.status(200).json(response);
     } catch (error) {
         res.status(500).json({msg: error.message});
@@ -21,7 +41,6 @@ export const getUsers = async(req, res) => {
 export const getUserById = async(req, res) => {
     try {
         const user = await Users.findOne({
-            // --- DITAMBAHKAN: nik, alamat, rw, status_warga ---
             attributes: ['id', 'uuid', 'name', 'email', 'role', 'url', 'nik', 'alamat', 'rw', 'status_warga'],
             where: {
                 uuid: req.params.id
@@ -43,7 +62,6 @@ export const getUserById = async(req, res) => {
 
 // 3. CREATE USER
 export const createUser = async(req, res) => {
-    // --- TAMBAHKAN: nik, alamat, rw di req.body ---
     const { name, email, password, confPassword, role, nik, alamat, rw } = req.body;
     
     if(password !== confPassword) return res.status(400).json({msg: "Password dan Confirm Password tidak cocok"});
@@ -55,11 +73,9 @@ export const createUser = async(req, res) => {
             email: email,
             password: hashPassword,
             role: role,
-            // --- TAMBAHKAN KE DATABASE ---
             nik: nik,
             alamat: alamat,
             rw: rw
-            // (status_warga otomatis menjadi 'pending' berdasarkan default database MySQL)
         });
         res.status(201).json({msg: "User Berhasil Dibuat"});
     } catch (error) {
@@ -67,7 +83,7 @@ export const createUser = async(req, res) => {
     }
 }
 
-// 4. UPDATE USER (TERMASUK LOGIKA HAPUS & UPLOAD FOTO)
+// 4. UPDATE USER
 export const updateUser = async(req, res) => {
     try {
         const user = await Users.findOne({
@@ -76,16 +92,14 @@ export const updateUser = async(req, res) => {
         
         if(!user) return res.status(404).json({msg: "User tidak ditemukan"});
 
-        // 1. VALIDASI AKSES
+        // VALIDASI AKSES
         if(req.role !== "admin" && req.userId !== user.id) {
             return res.status(403).json({msg: "Akses Ditolak: Anda hanya boleh mengedit profil sendiri!"});
         }
 
-        // 2. LOGIKA UPLOAD & HAPUS FOTO
         let fileName = user.image; 
         let url = user.url;        
 
-        // Cek apakah ada instruksi penghapusan foto dari Frontend
         if (req.body.removePhoto === "true") {
             if(user.image) {
                 const filepath = `./public/images/${user.image}`;
@@ -93,11 +107,9 @@ export const updateUser = async(req, res) => {
                     fs.unlinkSync(filepath);
                 }
             }
-            // Kosongkan variabel untuk update ke database
             fileName = null;
             url = null;
         } 
-        // Jika tidak dihapus, cek apakah ada file baru yang diupload
         else if (req.files && req.files.file) {
             const file = req.files.file;
             const fileSize = file.data.length;
@@ -108,7 +120,6 @@ export const updateUser = async(req, res) => {
             if(!allowedType.includes(ext.toLowerCase())) return res.status(422).json({msg: "Format gambar harus PNG, JPG, JPEG"});
             if(fileSize > 5000000) return res.status(422).json({msg: "Ukuran gambar maksimal 5 MB"});
 
-            // Hapus foto lama sebelum menyimpan yang baru
             if(user.image) {
                 const filepath = `./public/images/${user.image}`;
                 if(fs.existsSync(filepath)) {
@@ -116,16 +127,13 @@ export const updateUser = async(req, res) => {
                 }
             }
 
-            // Simpan foto baru
             file.mv(`./public/images/${fileName}`, (err)=>{
                 if(err) return res.status(500).json({msg: err.message});
             });
 
-            // Perbarui URL
             url = `${req.protocol}://${req.get("host")}/images/${fileName}`;
         }
 
-        // 3. DATA UPDATE PASSWORD & INFO DASAR (DITAMBAH NIK, ALAMAT, RW)
         const { name, email, password, confPassword, role, nik, alamat, rw } = req.body;
         
         let hashPassword;
@@ -137,13 +145,11 @@ export const updateUser = async(req, res) => {
             hashPassword = hash;
         }
 
-        // 4. ROLE UPDATE (Admin Only)
         let roleToUpdate = user.role; 
         if(req.role === "admin" && role) {
             roleToUpdate = role; 
         }
 
-        // 5. EKSEKUSI UPDATE KE DATABASE
         await Users.update({
             name: name,
             email: email,
@@ -151,9 +157,9 @@ export const updateUser = async(req, res) => {
             role: roleToUpdate,
             image: fileName,
             url: url,
-            nik: nik,       // --- DITAMBAHKAN ---
-            alamat: alamat, // --- DITAMBAHKAN ---
-            rw: rw          // --- DITAMBAHKAN ---
+            nik: nik,       
+            alamat: alamat, 
+            rw: rw          
         },{
             where:{
                 id: user.id
@@ -167,13 +173,24 @@ export const updateUser = async(req, res) => {
     }
 }
 
-// 5. DELETE USER
+// 5. DELETE USER (DIPERBARUI UNTUK ADMIN & KETUA RW)
 export const deleteUser = async(req, res) => {
     const user = await Users.findOne({
         where: { uuid: req.params.id }
     });
     if(!user) return res.status(404).json({msg: "User tidak ditemukan"});
     
+    // VALIDASI HAK AKSES
+    if (req.role === "ketua_rw") {
+        const ketua = await Users.findOne({ where: { id: req.userId } });
+        // Jika yang mau dihapus bukan warga, atau warganya beda RW -> TOLAK
+        if (user.role !== "warga" || user.rw !== ketua.rw) {
+            return res.status(403).json({msg: "Akses Ditolak: Anda hanya bisa menghapus warga dari RW Anda sendiri."});
+        }
+    } else if (req.role !== "admin") {
+        return res.status(403).json({msg: "Akses Ditolak!"});
+    }
+
     try {
         if(user.image) {
             const filepath = `./public/images/${user.image}`;
@@ -244,10 +261,8 @@ export const getWargaPending = async (req, res) => {
             return res.status(403).json({ msg: "Akses terlarang. Hanya untuk Ketua RW." });
         }
 
-        // Cari data Ketua RW yang sedang login
         const ketua = await Users.findOne({ where: { id: req.userId } });
 
-        // Tarik data warga yang statusnya pending di RW yang sama
         const response = await Users.findAll({
             attributes: ['uuid', 'name', 'nik', 'alamat', 'rw', 'status_warga'],
             where: {
@@ -277,7 +292,7 @@ export const validasiWarga = async (req, res) => {
             return res.status(403).json({ msg: "Anda tidak berhak memvalidasi warga dari RW lain." });
         }
 
-        const { status_warga } = req.body; // Menerima 'verified' atau 'rejected'
+        const { status_warga } = req.body; 
 
         await Users.update({ status_warga: status_warga }, {
             where: { id: user.id }

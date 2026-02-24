@@ -7,34 +7,45 @@ import {
     deleteUser,
     getStats,
     createPenanggungJawab,
-    getWargaPending, // <-- TAMBAHAN BARU
-    validasiWarga    // <-- TAMBAHAN BARU
+    getWargaPending, 
+    validasiWarga    
 } from "../controllers/UserController.js";
 import { verifyToken, verifyAdmin } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-// --- PERBAIKAN UTAMA DI SINI ---
+// --- STATISTIK ---
 // Hapus 'verifyAdmin' agar Petugas & Warga bisa lihat angka statistik
 router.get('/stats', verifyToken, getStats); 
-// -------------------------------
 
 // ==========================================
-// FITUR BARU: VALIDASI KETUA RW
+// FITUR KETUA RW (Validasi Pendaftaran)
 // ==========================================
-// Hanya menggunakan verifyToken karena pengecekan role 'ketua_rw' sudah dilakukan di dalam controllernya
 router.get('/warga/pending', verifyToken, getWargaPending);
 router.patch('/warga/validasi/:id', verifyToken, validasiWarga);
 
 // ==========================================
-// CRUD User (Tetap Khusus Admin, kecuali view/edit profil sendiri)
+// CRUD USER
 // ==========================================
-router.get('/users', verifyToken, verifyAdmin, getUsers);
-router.get('/users/:id', verifyToken, getUserById);
-router.post('/users', verifyToken, verifyAdmin, createUser);
-router.patch('/users/:id', verifyToken, updateUser);
-router.delete('/users/:id', verifyToken, verifyAdmin, deleteUser);
 
+// 1. GET ALL USERS (Admin & Ketua RW)
+// verifyAdmin DIHAPUS agar Ketua RW bisa masuk. (Filter datanya sudah kita atur di UserController)
+router.get('/users', verifyToken, getUsers);
+
+// 2. GET USER BY ID (Semua User untuk lihat profil)
+router.get('/users/:id', verifyToken, getUserById);
+
+// 3. CREATE USER (Tetap khusus Admin untuk tambah manual)
+router.post('/users', verifyToken, verifyAdmin, createUser);
+
+// 4. UPDATE USER (Semua User untuk edit profil)
+router.patch('/users/:id', verifyToken, updateUser);
+
+// 5. DELETE USER (Admin & Ketua RW)
+// verifyAdmin DIHAPUS agar Ketua RW bisa hapus warganya yang pindah. (Keamanan divalidasi di UserController)
+router.delete('/users/:id', verifyToken, deleteUser);
+
+// 6. CREATE PENANGGUNG JAWAB (Tetap khusus Admin)
 router.post('/users/penanggung-jawab', verifyToken, verifyAdmin, createPenanggungJawab);
 
 export default router;
