@@ -173,7 +173,7 @@ export const updateUser = async(req, res) => {
     }
 }
 
-// 5. DELETE USER (DIPERBARUI UNTUK ADMIN & KETUA RW)
+// 5. DELETE USER
 export const deleteUser = async(req, res) => {
     const user = await Users.findOne({
         where: { uuid: req.params.id }
@@ -206,13 +206,14 @@ export const deleteUser = async(req, res) => {
     }
 }
 
-// 6. GET STATS
+// 6. GET STATS (DIPERBARUI: Menambahkan res.json untuk ketua_rw)
 export const getStats = async(req, res) => {
     try {
         const countWarga = await Users.count({ where: { role: 'warga' } });
         const countPetugas = await Users.count({ where: { role: 'penanggung_jawab' } });
         const countAdmin = await Users.count({ where: { role: 'admin' } });
-
+        const countKetuaRw = await Users.count({ where: { role: 'ketua_rw' } });
+        
         const totalLaporan = await Reports.count();
         const laporanSelesai = await Reports.count({ where: { status: 'selesai' } });
         const laporanPending = await Reports.count({ where: { status: 'pending' } });
@@ -222,6 +223,7 @@ export const getStats = async(req, res) => {
             warga: countWarga,
             penanggung_jawab: countPetugas,
             admin: countAdmin,
+            ketua_rw: countKetuaRw, // --- TAMBAHAN BARU ---
             total_laporan: totalLaporan, 
             selesai: laporanSelesai,
             pending: laporanPending,
