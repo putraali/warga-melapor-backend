@@ -214,6 +214,18 @@ export const getStats = async(req, res) => {
         const countAdmin = await Users.count({ where: { role: 'admin' } });
         const countKetuaRw = await Users.count({ where: { role: 'ketua_rw' } });
         
+        // Menghitung status warga KHUSUS untuk wilayah Ketua RW yang sedang login
+        let wargaVerified = 0;
+        let wargaPending = 0;
+        let wargaRejected = 0;
+
+        if (req.role === 'ketua_rw') {
+            const ketua = await Users.findOne({ where: { id: req.userId } });
+            wargaVerified = await Users.count({ where: { role: 'warga', rw: ketua.rw, status_warga: 'verified' } });
+            wargaPending = await Users.count({ where: { role: 'warga', rw: ketua.rw, status_warga: 'pending' } });
+            wargaRejected = await Users.count({ where: { role: 'warga', rw: ketua.rw, status_warga: 'rejected' } });
+        }
+
         const totalLaporan = await Reports.count();
         const laporanSelesai = await Reports.count({ where: { status: 'selesai' } });
         const laporanPending = await Reports.count({ where: { status: 'pending' } });
@@ -224,6 +236,12 @@ export const getStats = async(req, res) => {
             penanggung_jawab: countPetugas,
             admin: countAdmin,
             ketua_rw: countKetuaRw,
+            
+            // Data khusus Ketua RW
+            warga_verified: wargaVerified,
+            warga_pending: wargaPending,
+            warga_rejected: wargaRejected,
+
             total_laporan: totalLaporan, 
             selesai: laporanSelesai,
             pending: laporanPending,
