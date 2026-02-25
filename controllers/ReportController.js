@@ -10,23 +10,60 @@ export const getReports = async (req, res) => {
     try {
         let response;
         
-        // --- [PERBAIKAN 1] TAMBAHKAN KOLOM BARU DI SINI ---
         const attributes = [
             'uuid', 'title', 'description', 'location', 
-            'tanggal_kejadian', // <--- WAJIB ADA
-            'latitude', 'longitude', 
-            'status', 'url', 'image', 'createdAt'
+            'tanggal_kejadian', 'latitude', 'longitude', 
+            'status', 'is_priority', 'url', 'image', 'createdAt' // <--- is_priority DITAMBAHKAN
         ];
-        // --------------------------------------------------
 
-        // A. JIKA ADMIN / PETUGAS
-        if (req.role === "admin" || req.role === "penanggung_jawab") {
+        // RELASI STANDAR (Agar tidak diulang-ulang)
+        const standardInclude = [
+            {
+                model: Users, 
+                attributes: ['name', 'email', 'rw'] // <--- Ambil RW pembuat laporan
+            },
+            {
+                model: Progress, 
+                attributes: ['description', 'image', 'url', 'createdAt'],
+                include: [{
+                    model: Users, 
+                    attributes: ['name', 'role']
+                }]
+            }
+        ];
+
+        // A. JIKA ADMIN -> Lihat Semua
+        if (req.role === "admin") {
             response = await Reports.findAll({
-                attributes: attributes, // Gunakan variabel attributes
+                attributes: attributes, 
+                include: standardInclude,
+                order: [['createdAt', 'DESC']] 
+            });
+        } 
+        // B. JIKA PETUGAS (PJ) -> Lihat laporan yang SUDAH DIVALIDASI RW
+        else if (req.role === "penanggung_jawab") {
+            response = await Reports.findAll({
+                attributes: attributes, 
+                where: {
+                    status: {
+                        [Op.notIn]: ['menunggu_rw', 'ditolak_rw'] // Jangan tampilkan yang belum divalidasi RW
+                    }
+                },
+                include: standardInclude,
+                order: [['createdAt', 'DESC']] 
+            });
+        }
+        // C. JIKA KETUA RW -> Lihat laporan dari warga di RW-nya saja
+        else if (req.role === "ketua_rw") {
+            const ketua = await Users.findOne({ where: { id: req.userId } });
+            
+            response = await Reports.findAll({
+                attributes: attributes, 
                 include: [
                     {
                         model: Users, 
-                        attributes: ['name', 'email']
+                        attributes: ['name', 'email', 'rw'],
+                        where: { rw: ketua.rw } // <--- KUNCI: Filter Warga yang RW-nya sama dengan Ketua
                     },
                     {
                         model: Progress, 
@@ -39,31 +76,19 @@ export const getReports = async (req, res) => {
                 ],
                 order: [['createdAt', 'DESC']] 
             });
-        } 
-        // B. JIKA WARGA
+        }
+        // D. JIKA WARGA -> Lihat laporan sendiri
         else {
             response = await Reports.findAll({
-                attributes: attributes, // Gunakan variabel attributes
+                attributes: attributes,
                 where: {
                     userId: req.userId 
                 },
-                include: [
-                    {
-                        model: Users,
-                        attributes: ['name', 'email']
-                    },
-                    {
-                        model: Progress, 
-                        attributes: ['description', 'image', 'url', 'createdAt'],
-                        include: [{
-                            model: Users,
-                            attributes: ['name'] 
-                        }]
-                    }
-                ],
+                include: standardInclude,
                 order: [['createdAt', 'DESC']]
             });
         }
+        
         res.status(200).json(response);
     } catch (error) {
         res.status(500).json({ msg: error.message });
@@ -74,41 +99,29 @@ export const getReports = async (req, res) => {
 export const getReportById = async (req, res) => {
     try {
         const report = await Reports.findOne({
-            where: {
-                uuid: req.params.id
-            }
+            where: { uuid: req.params.id }
         });
 
         if (!report) return res.status(404).json({ msg: "Data tidak ditemukan" });
 
-        // --- [PERBAIKAN 2] TAMBAHKAN KOLOM BARU DI DETAIL ---
         const attributes = [
             'uuid', 'title', 'description', 'location', 
-            'tanggal_kejadian', // <--- WAJIB ADA
-            'latitude', 'longitude',
-            'status', 'url', 'image', 'createdAt'
+            'tanggal_kejadian', 'latitude', 'longitude',
+            'status', 'is_priority', 'url', 'image', 'createdAt' // <--- is_priority DITAMBAHKAN
         ];
-        // ----------------------------------------------------
 
         let response;
-        if (req.role === "admin" || req.role === "penanggung_jawab") {
+        if (req.role === "admin" || req.role === "penanggung_jawab" || req.role === "ketua_rw") {
+            // Catatan: Anda bisa menambahkan filter ekstra untuk RW di sini, tapi karena UUID sulit ditebak, ini sudah cukup aman
             response = await Reports.findOne({
-                attributes: attributes, // Gunakan variabel attributes
-                where: {
-                    id: report.id
-                },
+                attributes: attributes, 
+                where: { id: report.id },
                 include: [
-                    {
-                        model: Users,
-                        attributes: ['name', 'email']
-                    },
-                    {
+                    { model: Users, attributes: ['name', 'email', 'rw'] },
+                    { 
                         model: Progress, 
                         attributes: ['description', 'image', 'url', 'createdAt'],
-                        include: [{
-                            model: Users,
-                            attributes: ['name']
-                        }]
+                        include: [{ model: Users, attributes: ['name'] }]
                     }
                 ]
             });
@@ -117,22 +130,14 @@ export const getReportById = async (req, res) => {
             if (req.userId !== report.userId) return res.status(403).json({ msg: "Akses terlarang" });
             
             response = await Reports.findOne({
-                attributes: attributes, // Gunakan variabel attributes
-                where: {
-                    [Op.and]: [{ id: report.id }, { userId: req.userId }]
-                },
+                attributes: attributes, 
+                where: { [Op.and]: [{ id: report.id }, { userId: req.userId }] },
                 include: [
-                    {
-                        model: Users,
-                        attributes: ['name', 'email']
-                    },
-                    {
+                    { model: Users, attributes: ['name', 'email', 'rw'] },
+                    { 
                         model: Progress, 
                         attributes: ['description', 'image', 'url', 'createdAt'],
-                        include: [{
-                            model: Users,
-                            attributes: ['name']
-                        }]
+                        include: [{ model: Users, attributes: ['name'] }]
                     }
                 ]
             });
@@ -143,7 +148,7 @@ export const getReportById = async (req, res) => {
     }
 }
 
-// 3. BUAT LAPORAN BARU
+// 3. BUAT LAPORAN BARU (Warga)
 export const createReport = async (req, res) => {
     if(req.files === null || req.files === undefined) return res.status(400).json({msg: "No File Uploaded"});
 
@@ -164,20 +169,17 @@ export const createReport = async (req, res) => {
                 title: req.body.title,
                 description: req.body.description,
                 location: req.body.location || "Lokasi tidak dicantumkan",
-                
-                // --- [PERBAIKAN 3] SIMPAN DATA DARI FRONTEND ---
-                // Pastikan nama req.body.tanggal_kejadian SAMA dengan yang dikirim frontend
                 tanggal_kejadian: req.body.tanggal_kejadian, 
                 latitude: req.body.latitude,
                 longitude: req.body.longitude,
-                // ---------------------------------------------
-
-                status: "pending", 
+                
+                status: "menunggu_rw", // <--- KUNCI: OTOMATIS MENUNGGU RW SAAT DIBUAT
+                is_priority: false,
                 image: fileName,
                 url: url,
                 userId: req.userId
             });
-            res.status(201).json({msg: "Laporan Berhasil Terkirim"});
+            res.status(201).json({msg: "Laporan Berhasil Terkirim dan Menunggu Validasi RW"});
         } catch (error) {
             console.log(error.message);
             res.status(500).json({msg: error.message});
@@ -189,22 +191,29 @@ export const createReport = async (req, res) => {
 export const updateReportAction = async (req, res) => {
     try {
         const report = await Reports.findOne({
-            where: {
-                uuid: req.params.id
-            }
+            where: { uuid: req.params.id }
         });
         if (!report) return res.status(404).json({ msg: "Data tidak ditemukan" });
 
-        const { status, note } = req.body; 
+        // Tolak Warga yang mencoba mengupdate laporan secara langsung melalui API
+        if (req.role === "warga") return res.status(403).json({ msg: "Warga tidak diizinkan mengubah status laporan" });
 
-        await Reports.update({
-            status: status
-        }, {
-            where: {
-                id: report.id
-            }
+        // Menerima is_priority (opsional, dikirim oleh Ketua RW)
+        const { status, note, is_priority } = req.body; 
+
+        // Data yang akan diupdate
+        let updateData = { status: status };
+        
+        // Jika ada pengiriman data is_priority (true/false) dari frontend (Ketua RW)
+        if (is_priority !== undefined) {
+            updateData.is_priority = is_priority;
+        }
+
+        await Reports.update(updateData, {
+            where: { id: report.id }
         });
 
+        // Catat di history jika ada catatan (Progress)
         if(note) {
             await Progress.create({
                 description: note,
@@ -215,7 +224,7 @@ export const updateReportAction = async (req, res) => {
             });
         }
 
-        res.status(200).json({ msg: "Status laporan berhasil diupdate & dicatat di history" });
+        res.status(200).json({ msg: "Status laporan berhasil diupdate" });
     } catch (error) {
         res.status(500).json({ msg: error.message });
     }
@@ -225,9 +234,7 @@ export const updateReportAction = async (req, res) => {
 export const deleteReport = async (req, res) => {
     try {
         const report = await Reports.findOne({
-            where: {
-                uuid: req.params.id
-            }
+            where: { uuid: req.params.id }
         });
         if (!report) return res.status(404).json({ msg: "Data tidak ditemukan" });
 
@@ -237,9 +244,7 @@ export const deleteReport = async (req, res) => {
         }
 
         await Reports.destroy({
-            where: {
-                id: report.id
-            }
+            where: { id: report.id }
         });
 
         res.status(200).json({ msg: "Laporan berhasil dihapus" });
@@ -253,17 +258,36 @@ export const getReportStats = async (req, res) => {
     try {
         let whereCondition = {};
         
+        // Jika warga, hanya hitung laporannya sendiri
         if(req.role === "warga"){
             whereCondition = { userId: req.userId };
         }
+        // Jika Ketua RW, hanya hitung laporan di RW-nya
+        else if (req.role === "ketua_rw") {
+            const ketua = await Users.findOne({ where: { id: req.userId } });
+            
+            // Ambil semua ID laporan dari warga di RW tersebut
+            const reportsInRw = await Reports.findAll({
+                attributes: ['id'],
+                include: [{
+                    model: Users,
+                    attributes: [],
+                    where: { rw: ketua.rw }
+                }]
+            });
+            const reportIds = reportsInRw.map(r => r.id);
+            whereCondition = { id: { [Op.in]: reportIds } };
+        }
 
         const totalReports = await Reports.count({ where: whereCondition });
+        const menunggu_rw = await Reports.count({ where: { ...whereCondition, status: 'menunggu_rw' } }); // <--- BARU
         const pending = await Reports.count({ where: { ...whereCondition, status: 'pending' } });
         const proses = await Reports.count({ where: { ...whereCondition, status: 'proses' } });
         const selesai = await Reports.count({ where: { ...whereCondition, status: 'selesai' } });
 
         res.status(200).json({
             total: totalReports,
+            menunggu_rw: menunggu_rw, // <--- BARU
             pending: pending,
             proses: proses,
             selesai: selesai

@@ -13,7 +13,7 @@ import { createProgress, getProgressByReport } from "../controllers/ProgressCont
 // Import Controller Comment
 import { getComments, createComment } from "../controllers/CommentController.js";
 
-// --- 1. IMPORT CONTROLLER FEEDBACK (BARU) ---
+// Import Controller Feedback
 import { createFeedback } from "../controllers/FeedbackController.js"; 
 
 import { 
@@ -38,8 +38,9 @@ router.get('/reports/:id', verifyToken, getReportById);
 // 3. Buat Laporan (Khusus Warga)
 router.post('/reports', verifyToken, verifyWarga, createReport);
 
-// 4. Update Status Laporan (Khusus Petugas/PJ)
-router.patch('/reports/:id', verifyToken, verifyPenanggungJawab, updateReportAction); 
+// 4. Update Status Laporan (Kini bisa diakses RW, Petugas, dan Admin. Filter dicek di Controller)
+// --- PERBAIKAN: verifyPenanggungJawab DIHAPUS agar Ketua RW bisa validasi ---
+router.patch('/reports/:id', verifyToken, updateReportAction); 
 
 // 5. Hapus Laporan (Khusus Admin)
 router.delete('/reports/:id', verifyToken, verifyAdmin, deleteReport);
@@ -60,9 +61,8 @@ router.get('/reports/:id/progress', verifyToken, getProgressByReport);
 
 
 // ==========================================
-// ROUTE FEEDBACK (PENILAIAN) - BARU
+// ROUTE FEEDBACK (PENILAIAN)
 // ==========================================
-// Menggunakan verifyToken agar User yang login bisa memberi nilai
 router.post('/reports/:id/feedback', verifyToken, createFeedback);
 
 
