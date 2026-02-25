@@ -206,7 +206,7 @@ export const deleteUser = async(req, res) => {
     }
 }
 
-// 6. GET STATS (DIPERBARUI: Menambahkan res.json untuk ketua_rw)
+// 6. GET STATS 
 export const getStats = async(req, res) => {
     try {
         const countWarga = await Users.count({ where: { role: 'warga' } });
@@ -223,7 +223,7 @@ export const getStats = async(req, res) => {
             warga: countWarga,
             penanggung_jawab: countPetugas,
             admin: countAdmin,
-            ketua_rw: countKetuaRw, // --- TAMBAHAN BARU ---
+            ketua_rw: countKetuaRw,
             total_laporan: totalLaporan, 
             selesai: laporanSelesai,
             pending: laporanPending,
@@ -256,7 +256,7 @@ export const createPenanggungJawab = async(req, res) => {
 // FITUR BARU: VALIDASI KETUA RW
 // ==========================================
 
-// 8. GET WARGA PENDING (KHUSUS KETUA RW)
+// 8. GET WARGA (SEMUA STATUS) KHUSUS KETUA RW
 export const getWargaPending = async (req, res) => {
     try {
         if (req.role !== "ketua_rw") {
@@ -269,9 +269,9 @@ export const getWargaPending = async (req, res) => {
             attributes: ['uuid', 'name', 'nik', 'alamat', 'rw', 'status_warga'],
             where: {
                 role: 'warga',
-                rw: ketua.rw, 
-                status_warga: 'pending'
-            }
+                rw: ketua.rw 
+            },
+            order: [['createdAt', 'DESC']] // Urutkan dari yang terbaru
         });
         res.status(200).json(response);
     } catch (error) {
