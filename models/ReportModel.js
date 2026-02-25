@@ -1,6 +1,6 @@
 import { Sequelize } from "sequelize";
 import db from "../config/database.js";
-// Users tidak perlu di-import di sini jika sudah pakai models/index.js
+import Users from "./UserModel.js"; // Di-import untuk mendefinisikan relasi di bawah
 
 const { DataTypes } = Sequelize;
 
@@ -14,32 +14,34 @@ const Reports = db.define('reports', {
     title: {
         type: DataTypes.STRING,
         allowNull: false,
-        validate: { notEmpty: true } // Tambahkan validasi
+        // Menggabungkan validasi panjang karakter dari code kedua
+        validate: { notEmpty: true, len: [3, 100] } 
     },
     description: {
         type: DataTypes.TEXT,
-        allowNull: false
+        allowNull: false,
+        validate: { notEmpty: true }
     },
     location: {
         type: DataTypes.STRING,
         allowNull: false
     },
     
-    // --- [BAGIAN INI YANG DITAMBAHKAN] ---
+    // --- DATA LOKASI DAN WAKTU ---
     tanggal_kejadian: {
         type: DataTypes.DATEONLY,
-        allowNull: true // Diset true dulu agar tidak error saat sync data lama
+        allowNull: true 
     },
     latitude: {
-        type: DataTypes.STRING,
+        type: DataTypes.STRING, // Tetap menggunakan STRING sesuai code asli Anda
         allowNull: true
     },
     longitude: {
-        type: DataTypes.STRING,
+        type: DataTypes.STRING, // Tetap menggunakan STRING sesuai code asli Anda
         allowNull: true
     },
-    // -------------------------------------
 
+    // --- DATA GAMBAR ---
     image: {
         type: DataTypes.STRING,
         allowNull: true
@@ -48,23 +50,38 @@ const Reports = db.define('reports', {
         type: DataTypes.STRING,
         allowNull: true
     },
-    // PERBAIKAN: Gunakan ENUM agar status terkontrol
+
+    // ==========================================
+    // FITUR ALUR VALIDASI KETUA RW
+    // ==========================================
     status: {
-        type: DataTypes.ENUM('pending', 'proses', 'selesai', 'ditolak'),
-        defaultValue: "pending",
+        // Menggabungkan semua opsi status agar data lama yang berstatus 'ditolak' tidak error
+        type: DataTypes.ENUM('menunggu_rw', 'pending', 'proses', 'selesai', 'ditolak', 'ditolak_rw'),
+        defaultValue: "menunggu_rw", // Default otomatis saat warga membuat laporan
         allowNull: false
     },
+    is_priority: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
+    },
+    // ==========================================
+
     vote_count: {
         type: DataTypes.INTEGER,
         defaultValue: 0
     },
     userId: { 
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        validate: { notEmpty: true }
     }
     
 }, {
     freezeTableName: true
 });
+
+// --- PENEGAKAN RELASI ANTAR TABEL ---
+Users.hasMany(Reports);
+Reports.belongsTo(Users, { foreignKey: 'userId' });
 
 export default Reports;
