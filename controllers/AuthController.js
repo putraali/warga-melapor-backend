@@ -44,7 +44,6 @@ export const Login = async(req, res) => {
         const name = user.name;
         const email = user.email;
         const role = user.role;
-        // --- TAMBAHAN: Ambil URL foto juga saat login ---
         const url = user.url; 
         
         // Buat Token (Tanpa expired agar sesi panjang)
@@ -66,8 +65,8 @@ export const Me = async (req, res) => {
         }
 
         const user = await Users.findOne({
-            // --- PENTING: Tambahkan 'url' di sini agar Navbar bisa baca foto ---
-            attributes: ['uuid', 'name', 'email', 'role', 'url'],
+            // 👇 INI DIA KUNCINYA! 'nik', 'alamat', 'rw', 'status_warga' sudah ditambahkan 👇
+            attributes: ['uuid', 'name', 'email', 'role', 'url', 'nik', 'alamat', 'rw', 'status_warga'],
             where: {
                 id: req.userId
             }
