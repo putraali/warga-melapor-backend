@@ -1,6 +1,7 @@
 import express from "express";
 import { 
     getReports, 
+    getMyReports, // <--- TAMBAHKAN IMPORT INI
     getReportById, 
     createReport, 
     deleteReport,
@@ -29,20 +30,23 @@ const router = express.Router();
 // ROUTE LAPORAN UTAMA
 // ==========================================
 
-// 1. Ambil Semua Laporan
+// 1. Ambil Semua Laporan (Untuk Admin / Petugas / RW)
 router.get('/reports', verifyToken, getReports);
 
-// 2. Ambil Detail Laporan
+// 2. Ambil Laporan Milik Warga Sendiri
+// PERBAIKAN: Rute 'me' WAJIB diletakkan di atas rute ':id' agar kata "me" tidak dianggap sebagai ID
+router.get('/reports/me', verifyToken, verifyWarga, getMyReports); 
+
+// 3. Ambil Detail Laporan
 router.get('/reports/:id', verifyToken, getReportById);
 
-// 3. Buat Laporan (Khusus Warga)
+// 4. Buat Laporan (Khusus Warga)
 router.post('/reports', verifyToken, verifyWarga, createReport);
 
-// 4. Update Status Laporan (Kini bisa diakses RW, Petugas, dan Admin. Filter dicek di Controller)
-// --- PERBAIKAN: verifyPenanggungJawab DIHAPUS agar Ketua RW bisa validasi ---
+// 5. Update Status Laporan (Kini bisa diakses RW, Petugas, dan Admin. Filter dicek di Controller)
 router.patch('/reports/:id', verifyToken, updateReportAction); 
 
-// 5. Hapus Laporan (Khusus Admin)
+// 6. Hapus Laporan (Khusus Admin)
 router.delete('/reports/:id', verifyToken, verifyAdmin, deleteReport);
 
 

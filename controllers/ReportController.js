@@ -296,3 +296,20 @@ export const getReportStats = async (req, res) => {
         res.status(500).json({msg: error.message});
     }
 }
+
+// Tambahkan fungsi ini di ReportController.js Anda jika belum ada
+export const getMyReports = async (req, res) => {
+    try {
+        // Asumsi req.user.id didapat dari middleware verifyToken
+        const userId = req.user.id || req.user.user_id; 
+
+        // Mengambil laporan hanya yang dibuat oleh user yang sedang login
+        const response = await db('reports') // Sesuaikan dengan nama tabel laporan Anda
+            .where('user_id', userId)
+            .orderBy('created_at', 'desc');
+
+        res.status(200).json({ success: true, data: response });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+}
