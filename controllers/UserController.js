@@ -206,7 +206,7 @@ export const deleteUser = async(req, res) => {
     }
 }
 
-// 6. GET STATS 
+// 6. GET STATS (DIPERBARUI UNTUK FILTER LAPORAN SESUAI RW)
 export const getStats = async(req, res) => {
     try {
         const countWarga = await Users.count({ where: { role: 'warga' } });
@@ -223,58 +223,61 @@ export const getStats = async(req, res) => {
         let laporanPending = 0;
         let laporanProses = 0;
 
-        // JIKA YANG LOGIN ADALAH KETUA RW
         if (req.role === 'ketua_rw') {
             const ketua = await Users.findOne({ where: { id: req.userId } });
             
-            // --- 1. Hitung Status Warga KHUSUS di RW tersebut ---
+            // 1. Hitung Status Warga KHUSUS untuk RW ini
             wargaVerified = await Users.count({ where: { role: 'warga', rw: ketua.rw, status_warga: 'verified' } });
             wargaPending = await Users.count({ where: { role: 'warga', rw: ketua.rw, status_warga: 'pending' } });
             wargaRejected = await Users.count({ where: { role: 'warga', rw: ketua.rw, status_warga: 'rejected' } });
 
-            // --- 2. Hitung Laporan KHUSUS di RW tersebut ---
-            // Cari semua ID warga yang ada di wilayah RW Ketua ini
-            const wargaRw = await Users.findAll({
-                attributes: ['id'],
-                where: { rw: ketua.rw }
+            // 2. Ambil ID semua warga yang berada di RW yang sama dengan Ketua RW
+            const usersInRw = await Users.findAll({
+                where: { rw: ketua.rw },
+                attributes: ['id']
             });
-            // Ubah menjadi array yang berisi kumpulan angka ID warganya saja
-            const wargaIds = wargaRw.map(warga => warga.id);
+            const userIds = usersInRw.map(user => user.id);
 
-            // Hitung laporan hanya berdasarkan array ID warga RW tersebut
-            totalLaporan = await Reports.count({ where: { userId: wargaIds } });
-            laporanSelesai = await Reports.count({ where: { status: 'selesai', userId: wargaIds } });
-            // Jika status menunggu rw Anda namanya 'menunggu_rw', gunakan 'menunggu_rw'
-            laporanPending = await Reports.count({ where: { status: ['pending', 'menunggu_rw'], userId: wargaIds } });
-            laporanProses = await Reports.count({ where: { status: 'proses', userId: wargaIds } });
+            // 3. Hitung Laporan KHUSUS milik warga di RW ini (berdasarkan ID yang didapat di atas)
+            totalLaporan = await Reports.count({ where: { userId: userIds } });
+            laporanSelesai = await Reports.count({ where: { status: 'selesai', userId: userIds } });
+            laporanProses = await Reports.count({ where: { status: 'proses', userId: userIds } });
+            
+            // Gabungkan yang masih menunggu RW atau pending ke dalam laporanPending
+            const countMenungguRw = await Reports.count({ where: { status: 'menunggu_rw', userId: userIds } });
+            const countPendingPetugas = await Reports.count({ where: { status: 'pending', userId: userIds } });
+            laporanPending = countMenungguRw + countPendingPetugas;
 
         } else {
-            // JIKA ADMIN / PETUGAS -> TAMPILKAN SEMUA DATA
+            // JIKA ADMIN / PETUGAS: Tampilkan dan hitung SEMUA Laporan dari semua RW
             totalLaporan = await Reports.count();
             laporanSelesai = await Reports.count({ where: { status: 'selesai' } });
-            laporanPending = await Reports.count({ where: { status: ['pending', 'menunggu_rw'] } });
             laporanProses = await Reports.count({ where: { status: 'proses' } });
-
-            wargaVerified = await Users.count({ where: { role: 'warga', status_warga: 'verified' } });
-            wargaPending = await Users.count({ where: { role: 'warga', status_warga: 'pending' } });
-            wargaRejected = await Users.count({ where: { role: 'warga', status_warga: 'rejected' } });
+            
+            const countMenungguRw = await Reports.count({ where: { status: 'menunggu_rw' } });
+            const countPendingPetugas = await Reports.count({ where: { status: 'pending' } });
+            laporanPending = countMenungguRw + countPendingPetugas;
         }
-
+        
         res.status(200).json({
             warga: countWarga,
-            petugas: countPetugas,
+            penanggung_jawab: countPetugas,
             admin: countAdmin,
             ketua_rw: countKetuaRw,
-            wargaVerified: wargaVerified,
-            wargaPending: wargaPending,
-            wargaRejected: wargaRejected,
-            totalLaporan: totalLaporan,
-            laporanSelesai: laporanSelesai,
-            laporanPending: laporanPending,
-            laporanProses: laporanProses
+            
+            // Data warga khusus Ketua RW
+            warga_verified: wargaVerified,
+            warga_pending: wargaPending,
+            warga_rejected: wargaRejected,
+
+            // Data laporan yang sudah difilter
+            total_laporan: totalLaporan, 
+            selesai: laporanSelesai,
+            pending: laporanPending,
+            proses: laporanProses
         });
     } catch (error) {
-        res.status(500).json({ msg: error.message });
+        res.status(500).json({msg: error.message});
     }
 }
 
