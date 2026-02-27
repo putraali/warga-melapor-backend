@@ -214,41 +214,67 @@ export const getStats = async(req, res) => {
         const countAdmin = await Users.count({ where: { role: 'admin' } });
         const countKetuaRw = await Users.count({ where: { role: 'ketua_rw' } });
         
-        // Menghitung status warga KHUSUS untuk wilayah Ketua RW yang sedang login
         let wargaVerified = 0;
         let wargaPending = 0;
         let wargaRejected = 0;
 
+        let totalLaporan = 0;
+        let laporanSelesai = 0;
+        let laporanPending = 0;
+        let laporanProses = 0;
+
+        // JIKA YANG LOGIN ADALAH KETUA RW
         if (req.role === 'ketua_rw') {
             const ketua = await Users.findOne({ where: { id: req.userId } });
+            
+            // --- 1. Hitung Status Warga KHUSUS di RW tersebut ---
             wargaVerified = await Users.count({ where: { role: 'warga', rw: ketua.rw, status_warga: 'verified' } });
             wargaPending = await Users.count({ where: { role: 'warga', rw: ketua.rw, status_warga: 'pending' } });
             wargaRejected = await Users.count({ where: { role: 'warga', rw: ketua.rw, status_warga: 'rejected' } });
+
+            // --- 2. Hitung Laporan KHUSUS di RW tersebut ---
+            // Cari semua ID warga yang ada di wilayah RW Ketua ini
+            const wargaRw = await Users.findAll({
+                attributes: ['id'],
+                where: { rw: ketua.rw }
+            });
+            // Ubah menjadi array yang berisi kumpulan angka ID warganya saja
+            const wargaIds = wargaRw.map(warga => warga.id);
+
+            // Hitung laporan hanya berdasarkan array ID warga RW tersebut
+            totalLaporan = await Reports.count({ where: { userId: wargaIds } });
+            laporanSelesai = await Reports.count({ where: { status: 'selesai', userId: wargaIds } });
+            // Jika status menunggu rw Anda namanya 'menunggu_rw', gunakan 'menunggu_rw'
+            laporanPending = await Reports.count({ where: { status: ['pending', 'menunggu_rw'], userId: wargaIds } });
+            laporanProses = await Reports.count({ where: { status: 'proses', userId: wargaIds } });
+
+        } else {
+            // JIKA ADMIN / PETUGAS -> TAMPILKAN SEMUA DATA
+            totalLaporan = await Reports.count();
+            laporanSelesai = await Reports.count({ where: { status: 'selesai' } });
+            laporanPending = await Reports.count({ where: { status: ['pending', 'menunggu_rw'] } });
+            laporanProses = await Reports.count({ where: { status: 'proses' } });
+
+            wargaVerified = await Users.count({ where: { role: 'warga', status_warga: 'verified' } });
+            wargaPending = await Users.count({ where: { role: 'warga', status_warga: 'pending' } });
+            wargaRejected = await Users.count({ where: { role: 'warga', status_warga: 'rejected' } });
         }
 
-        const totalLaporan = await Reports.count();
-        const laporanSelesai = await Reports.count({ where: { status: 'selesai' } });
-        const laporanPending = await Reports.count({ where: { status: 'pending' } });
-        const laporanProses = await Reports.count({ where: { status: 'proses' } });
-        
         res.status(200).json({
             warga: countWarga,
-            penanggung_jawab: countPetugas,
+            petugas: countPetugas,
             admin: countAdmin,
             ketua_rw: countKetuaRw,
-            
-            // Data khusus Ketua RW
-            warga_verified: wargaVerified,
-            warga_pending: wargaPending,
-            warga_rejected: wargaRejected,
-
-            total_laporan: totalLaporan, 
-            selesai: laporanSelesai,
-            pending: laporanPending,
-            proses: laporanProses
+            wargaVerified: wargaVerified,
+            wargaPending: wargaPending,
+            wargaRejected: wargaRejected,
+            totalLaporan: totalLaporan,
+            laporanSelesai: laporanSelesai,
+            laporanPending: laporanPending,
+            laporanProses: laporanProses
         });
     } catch (error) {
-        res.status(500).json({msg: error.message});
+        res.status(500).json({ msg: error.message });
     }
 }
 
